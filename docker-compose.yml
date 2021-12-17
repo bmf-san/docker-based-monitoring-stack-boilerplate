@@ -1,0 +1,198 @@
+version: '3.9'
+services:
+  app:
+    container_name: "${APP_CONTAINER_NAME}"
+    environment:
+      - APP_IMAGE_NAME=${APP_IMAGE_NAME}
+      - APP_IMAGE_TAG=${APP_IMAGE_TAG}
+      - ALPINE_IMAGE_NAME=${APP_IMAGE_NAME}
+    build:
+      context: "./app"
+      dockerfile: "Dockerfile"
+      args:
+        PLATFORM: "${PLATFORM}"
+        APP_IMAGE_NAME: "${APP_IMAGE_NAME}"
+        APP_IMAGE_TAG: "${APP_IMAGE_TAG}"
+        ALPINE_IMAGE_NAME: "${ALPINE_IMAGE_NAME}"
+    ports:
+      - ${APP_HOST_PORT}:${APP_CONTAINER_PORT}
+    command: ./app
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: ${FLUENTD_ADDRESS}
+        fluentd-async-connect: "true"
+        tag: "${APP_LOGGING_TAG}"
+  prometheus:
+    container_name: "${PROMETHEUS_CONTAINER_NAME}"
+    environment: 
+      - PROMETHEUS_IMAGE_NAME=${PROMETHEUS_IMAGE_NAME}
+      - PROMETHEUS_IMAGE_TAG=${PROMETHEUS_IMAGE_TAG}
+      - PROMETHEUS_CONTAINER_NAME=${PROMETHEUS_CONTAINER_NAME}
+      - PROMETHEUS_CONTAINER_PORT=${PROMETHEUS_CONTAINER_PORT}
+      - CADVISOR_CONTAINER_NAME=${CADVISOR_CONTAINER_NAME}
+      - CADVISOR_CONTAINER_PORT=${CADVISOR_CONTAINER_PORT}
+      - NODE_EXPORTER_CONTAINER_NAME=${NODE_EXPORTER_CONTAINER_NAME}
+      - NODE_EXPORTER_CONTAINER_PORT=${NODE_EXPORTER_CONTAINER_PORT}
+    build:
+      context: "./prometheus"
+      dockerfile: "Dockerfile"
+      args:
+        PLATFORM: "${PLATFORM}"
+        PROMETHEUS_IMAGE_NAME: "${PROMETHEUS_IMAGE_NAME}"
+        PROMETHEUS_IMAGE_TAG: "${PROMETHEUS_IMAGE_TAG}"
+        ALPINE_IMAGE_NAME: "${ALPINE_IMAGE_NAME}"
+        ALPINE_IMAGE_TAG: "${ALPINE_IMAGE_TAG}"
+    ports: 
+      - ${PROMETHEUS_HOST_PORT}:${PROMETHEUS_CONTAINER_PORT}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        envsubst < /template/prometheus.yml.template > /etc/prometheus/prometheus.yml
+        /bin/prometheus \
+        --config.file=/etc/prometheus/prometheus.yml \
+        --storage.tsdb.path=/prometheus
+    restart: always
+  node-exporter:
+    container_name: "${NODE_EXPORTER_CONTAINER_NAME}"
+    environment: 
+      - NODE_EXPORTER_IMAGE_NAME=${NODE_EXPORTER_IMAGE_NAME}
+      - NODE_EXPORTER_IMAGE_TAG=${NODE_EXPORTER_IMAGE_TAG}
+    build:
+      context: "./node-exporter"
+      dockerfile: "Dockerfile"
+      args:
+        PLATFORM: "${PLATFORM}"
+        NODE_EXPORTER_IMAGE_NAME: "${NODE_EXPORTER_IMAGE_NAME}"
+        NODE_EXPORTER_IMAGE_TAG: "${NODE_EXPORTER_IMAGE_TAG}"
+    volumes:
+      - /proc:/host/proc
+      - /sys:/host/sys
+      - /:/rootfs
+    ports:
+      - ${NODE_EXPORTER_HOST_PORT}:${NODE_EXPORTER_CONTAINER_PORT}
+    command: 
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)
+    restart: always
+  grafana:
+    container_name: "${GRAFANA_CONTAINER_NAME}"
+    environment: 
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP="${GF_USERS_ALLOW_SIGN_UP}"
+      - GF_USERS_ALLOW_ORG_CREATE="${GF_USERS_ALLOW_ORG_CREATE}"
+      - DS_PROMETHEUS=${DS_PROMETHEUS}
+    build:
+      context: "./grafana"
+      dockerfile: "Dockerfile"
+      args:
+        PLATFORM: "${PLATFORM}"
+        GRAFANA_IMAGE_NAME: "${GRAFANA_IMAGE_NAME}"
+        GRAFANA_IMAGE_TAG: "${GRAFANA_IMAGE_TAG}"
+    volumes: 
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - ${GRAFANA_HOST_PORT}:${GRAFANA_CONTAINER_PORT}
+    restart: always
+  # NOTE: This does not work on m1 Mac.
+  # cf. https://github.com/google/cadvisor/issues/2763
+  cadvisor:
+    container_name: "${CADVISOR_CONTAINER_NAME}"
+    build:
+      context: "./cadvisor"
+      dockerfile: "Dockerfile"
+      args:
+        PLATFORM: "${PLATFORM}"
+        CADVISOR_IMAGE_NAME: "${CADVISOR_IMAGE_NAME}"
+        CADVISOR_IMAGE_TAG: "${CADVISOR_IMAGE_TAG}"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    privileged: true
+    ports:
+      - ${CADVISOR_HOST_PORT}:${CADVISOR_CONTAINER_PORT}
+    command:
+      - '-port=${CADVISOR_CONTAINER_PORT}'
+    restart: always
+  elasticsearch:  
+    container_name: "${ELASTICSEARCH_CONTAINER_NAME}"
+    environment: 
+      - ELASTIC_USERNAME=${ELASTICSEARCH_ELASTIC_USERNAME}
+      - ELASTIC_PASSWORD=${ELASTICSEARCH_ELASTIC_PASSWORD}
+      - xpack.security.enabled=false
+      - discovery.type=single-node
+    build: 
+      context: "./elasticsearch"
+      dockerfile: "Dockerfile"
+      args:
+        ELASTICSEARCH_IMAGE_NAME: "${ELASTICSEARCH_IMAGE_NAME}"
+        ELASTICSEARCH_IMAGE_TAG: "${ELASTICSEARCH_IMAGE_TAG}"
+    volumes:
+      - ./elasticsearch:/usr/share/elasticsearch/data
+    ports:
+      - ${ELASTICSEARCH_HOST_PORT}:${ELASTICSEARCH_CONTAINER_PORT}
+    restart: always
+    healthcheck:
+      test: curl -s http://localhost:9200 >/dev/null || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 50
+  fluentd:
+    container_name: "${FLUENTD_CONTAINER_NAME}"
+    build:
+      context: "./fluentd"
+      dockerfile: "Dockerfile"
+      args:
+        PLATFORM: "${PLATFORM}"
+        FLUENTD_IMAGE_NAME: "${FLUENTD_IMAGE_NAME}"
+        FLUENTD_IMAGE_TAG: "${FLUENTD_IMAGE_TAG}"
+    environment: 
+      - ELASTICSEARCH_CONTAINER_PORT=${ELASTICSEARCH_CONTAINER_PORT}
+      - ELASTICSEARCH_ELASTIC_USERNAME=${ELASTICSEARCH_ELASTIC_USERNAME}
+      - ELASICSEARCH_ELASTIC_PASSWORD=${ELASTICSEARCH_ELASTIC_PASSWORD}
+      - FLUENTD_CONTAINER_PORT=${FLUENTD_CONTAINER_PORT}
+      - APP_LOGGING_TAG=${APP_LOGGING_TAG}
+      - FLUENTD_LOGSTASH_PREFIX_APP=${FLUENTD_LOGSTASH_PREFIX_APP}
+      - FLUENTD_TYPE_NAME_APP=${FLUENTD_TYPE_NAME_APP}
+    volumes:
+      - ./fluentd/config:/fluentd/etc
+    user: root
+    ports:
+      - ${FLUENTD_HOST_PORT}:${FLUENTD_CONTAINER_PORT}
+      - ${FLUENTD_HOST_PORT}:${FLUENTD_CONTAINER_PORT}/udp
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+  kibana:
+    container_name: "${KIBANA_CONTAINER_NAME}"
+    environment: 
+      - ELASTICSEARCH_CONTAINER_NAME=${ELASTICSEARCH_CONTAINER_NAME}
+      - ELASTICSEARCH_CONTAINER_PORT=${ELASTICSEARCH_CONTAINER_PORT}
+      - ELASTICSEARCH_ELASTIC_USERNAME=${ELASTICSEARCH_ELASTIC_USERNAME}
+      - ELASTICSEARCH_ELASTIC_PASSWORD=${ELASTICSEARCH_ELASTIC_PASSWORD}
+    volumes:
+      - type: bind
+        source: ./kibana/config/kibana.yml
+        target: /usr/share/kibana/config/kibana.yml
+        read_only: true
+    build:
+      context: "./kibana"
+      dockerfile: "Dockerfile"
+      args:
+        PLATFORM: "${PLATFORM}"
+        KIBANA_IMAGE_NAME: "${KIBANA_IMAGE_NAME}"
+        KIBANA_IMAGE_TAG: "${KIBANA_IMAGE_TAG}"
+    ports:
+      - ${KIBANA_HOST_PORT}:${KIBANA_CONTAINER_PORT}
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy

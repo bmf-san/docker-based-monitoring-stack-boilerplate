@@ -1,0 +1,14 @@
+scrape_configs:
+  - job_name: 'prometheus'
+    scrape_interval: 5s
+    static_configs:
+      - targets:
+        - ${PROMETHEUS_CONTAINER_NAME}:${PROMETHEUS_CONTAINER_PORT}
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets:
+        - ${CADVISOR_CONTAINER_NAME}:${CADVISOR_CONTAINER_PORT}
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets:
+        - ${NODE_EXPORTER_CONTAINER_NAME}:${NODE_EXPORTER_CONTAINER_PORT}
