@@ -1,6 +1,8 @@
 # docker-based-monitoring-stack-boilerplate
 This is a boilerplate for docker based monitoring stack.
 
+<img src="https://user-images.githubusercontent.com/13291041/146595299-9e21d2b8-3b3d-4931-a739-ea3a8e69fa13.png" alt="drawing" width="400"/>
+
 # Monitoring stacks
 - Elasticsearch
 - Fluentd
@@ -36,5 +38,7 @@ Then, run containers.
 | grafana         | http://localhost:3000/      |
 | kibana          | http://0.0.0.0:5601/        |
 
+![スクリーンショット 2021-12-18 4 04 19](https://user-images.githubusercontent.com/13291041/146595314-d593b9d8-9faa-4275-8c94-6c12cfcbfe36.png)
+
 # Appendix
-[gobel-example]](https://github.com/bmf-san/gobel-example)
+[gobel-example](https://github.com/bmf-san/gobel-example)
