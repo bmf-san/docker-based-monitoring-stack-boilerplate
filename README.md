@@ -15,7 +15,7 @@ This is a boilerplate for docker based monitoring stack.
   - By using Elasticsearch, Fluentd, Kibana
 - Container metrics monitoring
   - By using Prometheus, cadvisor, Grafana
-- System metrics monitoring
+- OS metrics monitoring
   - By using Prometheus, node-exporter, Grafana
 
 # Get started
