@@ -1,0 +1,6 @@
+# env file
+.env
+
+# docker-compose
+elasticsearch/nodes
+!/elasticsearch/nodes/.gitkeep
